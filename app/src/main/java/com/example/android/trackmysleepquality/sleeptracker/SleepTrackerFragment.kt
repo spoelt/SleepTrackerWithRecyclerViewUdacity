@@ -20,6 +20,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.databinding.DataBindingUtil
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
@@ -51,19 +52,35 @@ class SleepTrackerFragment : Fragment() {
 
         val application = requireNotNull(this.activity).application
 
-        val adapter = SleepNightAdapter()
-        binding.sleepList.adapter = adapter
-
+        // Create an instance of the ViewModel Factory.
         val dataSource = SleepDatabase.getInstance(application).sleepDatabaseDao
-
         val viewModelFactory = SleepTrackerViewModelFactory(dataSource, application)
 
+        // Get a reference to the ViewModel associated with this fragment.
         val sleepTrackerViewModel =
                 ViewModelProviders.of(
                         this, viewModelFactory).get(SleepTrackerViewModel::class.java)
 
+        // To use the ViewModel with data binding, you have to explicitly give the binding
+        // object a reference to it.
         binding.sleepTrackerViewModel = sleepTrackerViewModel
 
+        val adapter = SleepNightAdapter(SleepNightListener {
+            //nightId -> Toast.makeText(context, "${nightId}", Toast.LENGTH_SHORT).show()
+            nightId -> sleepTrackerViewModel.onSleepNightClicked(nightId)
+        })
+        binding.sleepList.adapter = adapter
+
+        sleepTrackerViewModel.navigateToSleepDataQuality.observe(this, Observer {night ->
+            night?.let {
+                this.findNavController().navigate(SleepTrackerFragmentDirections
+                        .actionSleepTrackerFragmentToSleepDetailFragment(night))
+                sleepTrackerViewModel.onSleepDataQualityNavigated()
+            }
+        })
+
+        // Specify the current activity as the lifecycle owner of the binding.
+        // This is necessary so that the binding can observe LiveData updates.
         binding.setLifecycleOwner(this)
 
         // Add an Observer on the state variable for showing a Snackbar message
@@ -103,7 +120,7 @@ class SleepTrackerFragment : Fragment() {
         // Create an observer on sleepTrackerViewModel.nights that sets the Adapter when there is new data.
         sleepTrackerViewModel.nights.observe(viewLifecycleOwner, Observer {
             it?.let {
-                adapter.data = it
+                adapter.submitList(it)
             }
         })
 
